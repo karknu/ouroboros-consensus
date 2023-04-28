@@ -1,4 +1,9 @@
-# An Overview of consensus
+---
+sidebar_label: 'Overview'
+sidebar_position: 1
+---
+
+# What is Ouroboros Consensus?
 
 ## Very High-Level Motivation
 
@@ -29,7 +34,7 @@ stake -- the honest nodes will all continually reach _consensus_ regarding the
 selection of a single best chain and that that chain grows over time.
 
 The Consensus Layer defines the core Consensus components and logic, notably the
-Ouroboros protocol. See [References](References.md).
+Ouroboros protocol. See [References](/for-developers/References).
 
 ## The Neighbors of Consensus
 

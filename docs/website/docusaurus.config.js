@@ -4,6 +4,9 @@
 const lightCodeTheme = require('prism-react-renderer/themes/github');
 const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 
+// generic edition URL that will be used by all parts of the documentation
+const editUrl = 'https://github.com/input-output-hk/ouroboros-consensus/tree/main/docs/';
+
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Ouroboros Consensus',
@@ -46,12 +49,36 @@ const config = {
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl:
-            'https://github.com/input-output-hk/ouroboros-consensus/tree/main/docs/',
+          editUrl,
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
         },
+      }),
+    ],
+  ],
+
+  plugins: [
+    [
+      "content-docs",
+      /** @type {import('@docusaurus/plugin-content-docs').Options} */
+      ({
+        id: "about-ouroboros",
+        path: "about-ouroboros",
+        routeBasePath: "about-ouroboros",
+        editUrl,
+        editLocalizedFiles: true,
+      }),
+    ],
+    [
+      "content-docs",
+      /** @type {import('@docusaurus/plugin-content-docs').Options} */
+      ({
+        id: "for-developers",
+        path: "for-developers",
+        routeBasePath: "for-developers",
+        editUrl,
+        editLocalizedFiles: true,
       }),
     ],
   ],
@@ -72,10 +99,14 @@ const config = {
         },
         items: [
           {
-            type: 'doc',
-            docId: 'Introduction',
+            to: '/about-ouroboros',
             position: 'left',
-            label: 'Documentation',
+            label: 'About Ouroboros',
+          },
+          {
+            to: '/for-developers',
+            position: 'left',
+            label: 'For Developers',
           },
           {
             type: 'doc',
