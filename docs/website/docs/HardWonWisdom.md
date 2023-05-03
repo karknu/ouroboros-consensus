@@ -169,19 +169,33 @@ The known start times are enough to recognize when the given argument is during 
 Otherwise, we need more information to know whether the given argument is during the last era with a known start time, ie the first era with an unknown end time.
 Even if the query argument is after that start time, it _might_ instead be in a future era with a different epoch size/slot length, and so the correct translation may differ from the hypothetical response derived from the assumption the query argument precedes the first unknown end time.
 
-Instead of a known end time for the last era with a known start time, the code relies an a lower bound for that end time.
-The ledger state will determine the soonest point at which the last era with a known start time (aka the first era with an unknown end time) could end.
-If the query argument precedes that cutoff (aka "the (forecast) horizon"), then the translation succeeds, otherwise it fails.
-For this purpose, the code (including config files) cannot support an era unless it also knows a "safe zone" for that era, where the safe zone is enough information to determine this cutoff.
+For the first era with an unknown end time (ie the last era with a known start time), the code relies an a lower bound for that end time, ie the soonest that era could possibly end (aka "the horizon" or "the forecast horizon").
+If the query argument precedes that horizon, then the translation succeeds, otherwise it fails.
+For this purpose, the code (including config files) cannot support an era unless it also knows a "safe zone" for that era, where the safe zone (along with any additional assumptions the Consensus code makes) is enough information to determine the horizon induced by a given the ledger state.
 
 In general, it would be possible to design a system such that even the final ledger state in an era did not determine when that era would end.
 That'd be an empty safe zone, consisting of zero slots.
 For example, perhaps the first block of an era identifies itself as such simply by setting some field in its header.
-The design of the Ouroboros Praos protocol itself prevents Cardano from doing something like that (TODO did the Byron protocol also? Is that named "Ouroboros Classic"? "Ouroboros BFT"?).
-In particular, a Praos ledger state must determine the leader schedule for some non-empty prefix of the upcoming epochs.
-If only for that reason, then, the Cardano ledger rules do not support abrupt changes to the election rules, such as era changes (at the very least, the leader schedule is slot- and epoch-based while eras can change the slot length and/or the epoch size).
-Such changes must come with sufficient forewarning (spoiler: _**two**_ stability windows) before they take effect and they must take effect at some epoch boundary.
-Thus, every era transition happens as part of an epoch transition, and whether or not an epoch transition includes an era transition is determined by at least one ledger state that precedes the epoch transition by at least some minimum number of slots (spoiler: _**two**_ stability windows).
+For that kind of chain, some ledger states would not provide enough information to do any translations whatsoever of slots/times/epochs _after_ that ledger state's tip.
+
+For the case of Cardano, however, other concerns (not directly related to slot/epoch/time translations) already require a seperate cutoff, similar to the horizon, to be above some minimum.
+For the sake of simplicity, we take that same minimum to be the safe zone.
+As a result, the safe zone is equal to one _stability window_, which is `2k` slots for Byron and `3k/f` slots for every Shelley era.
+
+TODO I have always taken it for granted that the Header-Body Split requires that the transition cannot happen within the stability window.
+But I'm suddenly realizing that that's actually unnecessary.
+The only true requirement is that a ledger state contains enough information to validate at least `k+1` headers subsequent headers.
+You get the first header for free from simply ticking the ledger state, since there are no intervening blocks.
+The remaining `k` are directly ensured (definitionally) by the ledger rule's enforcement of the stability window, assuming there's no era transition during that stability window.
+Hence the current requirement.
+What I just realized is that the leader schedule of the next epoch should already be determined if this epoch ends within the stability window, _regardless_ of whether that epoch is in the next era.
+We can translate ledger views across era transitions, and so the epoch's leader schedule is sufficiently known, even if that is in the next era.
+Moreover, the _very_ mild assumption that every epoch contains more than one stability window ensures that the next era can't end before there are `k` headers.
+TODOTODO What about the config file overrides that result in empty epochs?
+(
+I'm actually unsure how that's working now... does it only work if a whole prefix of the static era sequence is skipped?
+EG you can't skip only the 3rd era?
+)
 
 Warning.
 (Skip this on your first read of this section.)
@@ -191,10 +205,12 @@ On `mainnet` Cardano, only blocks in an era can cause that era to end.
 This also implies each era with a known end time on a `mainnet` chain must contain some blocks on that chain.
 On the other hand, the Consensus Layer configuration inputs do permit overriding the era transition rules for the sake of testing, in which case a ledger state could anticipate the end time of several subsequent eras and eras could be empty (eg main use case is skipping from Byron to some later Shelley era ASAP, in which case all the intervening eras have no blocks but also have no slots!).
 
+Warning.
+(Skip this on your first several reads of this section.)
 There is one last notable caveat at this abstract level.
-The Hard Fork Combinator safe zone for each `mainnet` era is exactly the minimum number of slots of forewarning before the end of that era.
-One might naturally expect this is the stability window (see the above entry in this file for why this is `3k/f` in Praos), but it is instead twice that.
-The best resource we have for motivating this decision is [Edsko de Vries' IOG seminar from 2020 June on the HFC and time](https://drive.google.com/file/d/1QIJ-VBlj-txB6K6E7DIEnY5TzaD89qQm/view).
+The Byron and Shelley ledgers already had some logic for the evolution of proposals that can change the protocol (eg incur an era transition).
+When designing and implementing the Hard Fork Combinator for use at the Byron-to-Shelley transition, Edsko de Vries reasoned through that the state machines of that logic needed to be adjusted to ensure "double stability".
+The best resource we have for motivating this constraint is [Edsko de Vries' IOG seminar from 2020 June on the HFC and time](https://drive.google.com/file/d/1QIJ-VBlj-txB6K6E7DIEnY5TzaD89qQm/view).
 
 - At the 16m04s mark he motivates that the forewarning must suffice for at least k+1 headers.
 
@@ -203,10 +219,8 @@ The best resource we have for motivating this decision is [Edsko de Vries' IOG s
 
 - From 30m46s to 38m52s, he explains the justification for cross-chain translations (and off-handedly that it's technically optional).
 
-Thus the Shelley safe zone is _**two**_ stability windows, as enforced by [the `PPUP` ledger rule](https://github.com/input-output-hk/cardano-ledger/blob/180271602640bcac1214084b6de61d0468332f00/eras/shelley/impl/src/Cardano/Ledger/Shelley/Rules/Ppup.hs#L192) (that's the tip of the `master` branch at the time of writing this, although this constraint is not new).
-
-TODO In hindsight today, I have some doubts about these conclusions.
-Specifically, I suspect singly-stable could be completely sufficient, at least for ChainSync.
+For example, [Shelley the `PPUP` ledger rule](https://github.com/input-output-hk/cardano-ledger/blob/180271602640bcac1214084b6de61d0468332f00/eras/shelley/impl/src/Cardano/Ledger/Shelley/Rules/Ppup.hs#L192) requires update proposals to be settled at least two stability windows before the end of the epoch (ie `6k/f`, not just `3k/f`).
+(That links to the tip of the `master` branch at the time of writing this, although this constraint is not new.)
 
 The ultimate answer to the Office Hours question is that the query will fail if and only if its argument is beyond the conservative estimate for the end of the first era without a known end time.
 That estimate will usually be the start of the least epoch that begins more than `6k/f` slots after the tip of ledger state that was used to answer the query.
