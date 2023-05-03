@@ -182,16 +182,19 @@ For the case of Cardano, however, other concerns (not directly related to slot/e
 For the sake of simplicity, we take that same minimum to be the safe zone.
 As a result, the safe zone is equal to one _stability window_, which is `2k` slots for Byron and `3k/f` slots for every Shelley era.
 
-TODO I have always taken it for granted that the Header-Body Split requires that the transition cannot happen within the stability window.
-But I'm suddenly realizing that that's actually unnecessary.
-The only true requirement is that a ledger state contains enough information to validate at least `k+1` headers subsequent headers.
-You get the first header for free from simply ticking the ledger state, since there are no intervening blocks.
-The remaining `k` are directly ensured (definitionally) by the ledger rule's enforcement of the stability window, assuming there's no era transition during that stability window.
-Hence the current requirement.
-What I just realized is that the leader schedule of the next epoch should already be determined if this epoch ends within the stability window, _regardless_ of whether that epoch is in the next era.
-We can translate ledger views across era transitions, and so the epoch's leader schedule is sufficiently known, even if that is in the next era.
-Moreover, the _very_ mild assumption that every epoch contains more than one stability window ensures that the next era can't end before there are `k` headers.
-TODOTODO What about the config file overrides that result in empty epochs?
+Warning.
+(Skip this on your first several reads of this section.)
+
+- Headers declare what era they are in.
+
+- The stake distribution of the next epoch is determined at least one stability window before it starts, regardless of whether that next epoch is in the next era.
+
+In conjunction, a header that satisifes its declared era's rules can be validated as such by some ledger state even if there is an era transition between the two.
+On the other hand, there is no guarantee that the ledger state the header actually extends is indeed in the era the header claims to be in; so it could satisfy the rules of its claimed era but still actually be an invalid header.
+Moreover, era transitions are theoretically not the only updates that affect the validity of headers.
+In particular, no part of the design beyond wise convention is preventing a so-called "intra-era" fork from influencing the header validity.
+
+TODO What about the config file overrides that result in empty epochs?
 (
 I'm actually unsure how that's working now... does it only work if a whole prefix of the static era sequence is skipped?
 EG you can't skip only the 3rd era?
@@ -201,7 +204,7 @@ Warning.
 (Skip this on your first read of this section.)
 That reasoning implies some non-empty suffix of the ledger states in an era will each determine the exact end time of that era.
 It's technically possible a ledger state could also determine the end time of subseqeuent eras, but the Cardano ledger rules do not permit that.
-On `mainnet` Cardano, only blocks in an era can cause that era to end.
+On `mainnet` Cardano, only blocks in an era can cause that era to end (technically false, but it's the right sentiment).
 This also implies each era with a known end time on a `mainnet` chain must contain some blocks on that chain.
 On the other hand, the Consensus Layer configuration inputs do permit overriding the era transition rules for the sake of testing, in which case a ledger state could anticipate the end time of several subsequent eras and eras could be empty (eg main use case is skipping from Byron to some later Shelley era ASAP, in which case all the intervening eras have no blocks but also have no slots!).
 
@@ -221,6 +224,8 @@ The best resource we have for motivating this constraint is [Edsko de Vries' IOG
 
 For example, [Shelley the `PPUP` ledger rule](https://github.com/input-output-hk/cardano-ledger/blob/180271602640bcac1214084b6de61d0468332f00/eras/shelley/impl/src/Cardano/Ledger/Shelley/Rules/Ppup.hs#L192) requires update proposals to be settled at least two stability windows before the end of the epoch (ie `6k/f`, not just `3k/f`).
 (That links to the tip of the `master` branch at the time of writing this, although this constraint is not new.)
+
+TODO Instead of double-stability in the ledger rules, we could instead only draw conclusions that should not be subject to roll back (such as time translations) from the youngest immutable ledger state.
 
 The ultimate answer to the Office Hours question is that the query will fail if and only if its argument is beyond the conservative estimate for the end of the first era without a known end time.
 That estimate will usually be the start of the least epoch that begins more than `6k/f` slots after the tip of ledger state that was used to answer the query.
