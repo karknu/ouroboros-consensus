@@ -126,6 +126,8 @@ But this is the nth time we've answered it (sometimes we asked ourselves), and e
 This topic definitely deserves better docs/dedicated tests/etc---but we're (as always) strapped for time, so I'm writing this as a band-aid (that's the point of this whole file).
 I will summarize abstrtactly and then point to key parts of the implementation.
 
+### The HFC "Shape" and the HFC "Summary"
+
 The Hard Fork Combinator lets us specify eras separately and compose them into a single type of chain (ie a "block type") that can fork through some prefix of those eras.
 Any piece of code supports some sequence of eras.
 For example, the original Cardano code only supported Byron.
@@ -151,14 +153,18 @@ Thus, every ledger state determines the start time of N eras and the end time of
 Subsequent ledger states may have greater Ns, but the invariant remains true.
 Every N will be at least 1, at most the length of the sequence of eras the code supports, and subsequent ledger states on a chain cannot have a lesser N.
 
-Warning.
-(Skip this on your first read of this section.)
+### Aside: Warning
+
+(Skip this section on your first read.)
+
 That invariant was coyly worded to exclude one perhaps-surprising exception: the code allows for an era to be specified to never end.
 The above invariants remain true, but can be tightened in this case.
 Specifically, when the ledger state reaches the era that is specified to never end, it is thereafter always definitely in the Nth era, and there will never be a greater N.
 (The code may support eras after an unending one, but that would be an awkard/wasteful choice.)
 No Cardano era is specified to never end, and we currently do not foresee every doing so.
 The behavior is only supported for tests and for reuse by other blockchain implementors that are not concerned with extensibility.
+
+### The Wrinkle with Time
 
 For interpreting slot/time/epoch translation queries, the key motivating fact is that each era can have a different size of epoch (in slots) and/or a different length of slot (a time duration).
 Thus, we cannot handle a translation query unless we know which era its argument is in and the durations of all preceding eras, or, equivalently, the start times of all eras up-to-and-including the argument is in.
@@ -182,8 +188,9 @@ For the case of Cardano, however, other concerns (not directly related to slot/e
 For the sake of simplicity, we take that same minimum to be the safe zone.
 As a result, the safe zone is equal to one _stability window_, which is `2k` slots for Byron and `3k/f` slots for every Shelley era.
 
-Warning.
-(Skip this on your first several reads of this section.)
+### Aside: The Necessary Stability of Header Validity
+
+(Skip this section on your first several reads.)
 
 - Headers declare what era they are in.
 
@@ -203,7 +210,10 @@ The actual fundamental requirement derived from Praos is two-fold.
 
 - No false alarms for honest headers: an honest header (which is by definition actually valid) must never appear as invalid.
 
-- Never too many missed alarms: no adversary can mint a chain of apparently-valid headers that has `k` or more headers after its intersection with any honest chain within the stability window. (TODO Is this constraint overly-precise?)
+- Never too many missed alarms: no adversary can mint a chain of apparently-valid headers that has `k` or more headers after its intersection with any honest chain within the stability window.
+  (TODO Is this constraint overly-precise?)
+
+- (Compare that pair to the "Why use the Honest Chain Growth window as the Ledger's Stability Window?" question in `HardWonWisdom.md`.)
 
 Roughly: the rule is to not (at all) underestimate the honest chain growth and to not (TODO "significantly" or "at all"?) over-estimate the adversarial chain growth.
 
@@ -236,16 +246,20 @@ I'm actually unsure how that's working now... does it only work if a whole prefi
 EG you can't skip only the 3rd era?
 )
 
-Warning.
-(Skip this on your first read of this section.)
+### Aside: Warning
+
+(Skip this section on your first read.)
+
 That reasoning implies some non-empty suffix of the ledger states in an era will each determine the exact end time of that era.
 It's technically possible a ledger state could also determine the end time of subseqeuent eras, but the Cardano ledger rules do not permit that.
 On `mainnet` Cardano, only blocks in an era can cause that era to end (technically false, but it's the right sentiment).
 This also implies each era with a known end time on a `mainnet` chain must contain some blocks on that chain.
 On the other hand, the Consensus Layer configuration inputs do permit overriding the era transition rules for the sake of testing, in which case a ledger state could anticipate the end time of several subsequent eras and eras could be empty (eg main use case is skipping from Byron to some later Shelley era ASAP, in which case all the intervening eras have no blocks but also have no slots!).
 
-Warning.
-(Skip this on your first several reads of this section.)
+### Aside: Warning
+
+(Skip this section on your first several reads.)
+
 There is one last notable caveat at this abstract level.
 The Byron and Shelley ledgers already had some logic for the evolution of proposals that can change the protocol (eg incur an era transition).
 When designing and implementing the Hard Fork Combinator for use at the Byron-to-Shelley transition, Edsko de Vries reasoned through that the state machines of that logic needed to be adjusted to ensure "double stability".
@@ -263,8 +277,12 @@ For example, [Shelley the `PPUP` ledger rule](https://github.com/input-output-hk
 
 TODO Instead of double-stability in the ledger rules, we could instead only draw conclusions that should not be subject to roll back (such as time translations) from the youngest immutable ledger state.
 
+### Answer to the Question
+
 The ultimate answer to the Office Hours question is that the query will fail if and only if its argument is beyond the conservative estimate for the end of the first era without a known end time.
 That estimate will usually be the start of the least epoch that begins more than `6k/f` slots after the tip of ledger state that was used to answer the query.
+
+### Implementation Pointers
 
 The key corresponding parts of the implementation are as follows.
 
