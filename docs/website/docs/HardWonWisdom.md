@@ -195,17 +195,17 @@ Moreover, era transitions are not the only updates that can affect the validity 
 One excellent example is the the Transitional Praos (aka "TPraos") decentralization parameter `d` (any protocol parameter change requires a version change, but it could be minor---only major version changes can possibly cause proper era transitions).
 Another example is that no part of the design beyond (probably wise) convention is preventing a so-called "intra-era" fork from influencing the header validity.
 
-So, an adversary could lie about what era their header is in order to send an apparently valid header that is actually revealed as invalid once the intervening blocks are available.
+So, an adversary could lie about what era their header inhabits in order to send an apparently valid header that is actually revealed as invalid once the intervening blocks are available.
 Obviously that's undesirable, but is it truly problematic?
 We generally consider that the Header-Body Split requires a ledger state can correctly determine the validity of any header within one stability window of the (last applied block of the) ledger state.
 But that's just an ideal case; we could relax that, if we had a reason to embrace the additional complexity it involves.
 The actual fundamental requirement derived from Praos is two-fold.
 
-- No false alarams for honest headers: an honest (which is by definition actually valid) header must never appear as invalid.
+- No false alarms for honest headers: an honest header (which is by definition actually valid) must never appear as invalid.
 
-- Never too many missed positives: no adversary can mint a chain of apparently-valid headers that has `k` or more headers after its intersection with any honest chain within the stability window. (TODO Is this constraint overly-precise?)
+- Never too many missed alarms: no adversary can mint a chain of apparently-valid headers that has `k` or more headers after its intersection with any honest chain within the stability window. (TODO Is this constraint overly-precise?)
 
-Roughly: the rule is to not (at all) underestimate the honest chain growth and to not (significantly) over-estimate the adversarial chain growth.
+Roughly: the rule is to not (at all) underestimate the honest chain growth and to not (TODO "significantly" or "at all"?) over-estimate the adversarial chain growth.
 
 Consider some examples.
 
