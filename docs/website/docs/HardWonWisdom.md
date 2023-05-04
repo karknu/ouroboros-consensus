@@ -190,9 +190,45 @@ Warning.
 - The stake distribution of the next epoch is determined at least one stability window before it starts, regardless of whether that next epoch is in the next era.
 
 In conjunction, a header that satisifes its declared era's rules can be validated as such by some ledger state even if there is an era transition between the two.
-On the other hand, there is no guarantee that the ledger state the header actually extends is indeed in the era the header claims to be in; so it could satisfy the rules of its claimed era but still actually be an invalid header.
-Moreover, era transitions are theoretically not the only updates that affect the validity of headers.
-In particular, no part of the design beyond wise convention is preventing a so-called "intra-era" fork from influencing the header validity.
+On the other hand, there is no guarantee that the ledger state the header actually extends is indeed in the era the header claims to be in; so it could satisfy the rules of its claimed era but still actually be an invalid header (when that claim is a lie).
+Moreover, era transitions are not the only updates that can affect the validity of headers.
+One excellent example is the the Transitional Praos (aka "TPraos") decentralization parameter `d` (any protocol parameter change requires a version change, but it could be minor---only major version changes can possibly cause proper era transitions).
+Another example is that no part of the design beyond (probably wise) convention is preventing a so-called "intra-era" fork from influencing the header validity.
+
+So, an adversary could lie about what era their header is in order to send an apparently valid header that is actually revealed as invalid once the intervening blocks are available.
+Obviously that's undesirable, but is it truly problematic?
+We generally consider that the Header-Body Split requires a ledger state can correctly determine the validity of any header within one stability window of the (last applied block of the) ledger state.
+But that's just an ideal case; we could relax that, if we had a reason to embrace the additional complexity it involves.
+The actual fundamental requirement derived from Praos is two-fold.
+
+- No false alarams for honest headers: an honest (which is by definition actually valid) header must never appear as invalid.
+
+- Never too many missed positives: no adversary can mint a chain of apparently-valid headers that has `k` or more headers after its intersection with any honest chain within the stability window. (TODO Is this constraint overly-precise?)
+
+Roughly: the rule is to not (at all) underestimate the honest chain growth and to not (significantly) over-estimate the adversarial chain growth.
+
+Consider some examples.
+
+- Even in this laxer rule, the real `d` parameter cannot change within the stability window, because if it does change, then honest headers that are in an overlay slot according to the reduced `d` might not be in an overlay slot according to the unreduced `d`, and that would lead to false negatives for honest (overlay) headers.
+
+- It would be possible to have defined the overlay schedule such the overlaidness of a slot was monotonic in `d`, even though we didn't do it that way.
+  Even if we had, then there still would have been false alarms for honest headers, because some honest headers in slots that were actually not overlaid would be rejected since the incorrectly greater `d` would interpret those slots as overlaid.
+  So the `d` parameter is something that even the laxer rule could not accomodate (even when assuming it can't increase, because the its overall influence on honest headers is not monotonic).
+
+- As of epoch 257, `d=0` (ie no slots are overlaid).
+  Since then, no change to the Cardano protocol parameters (including era transitions) has changed the (average) number of slots any given issuer leads during any given interval of slots.
+  Also since then, every change that has at all affected the validity of headers has been an era transition.
+  Therefore, _none of those subsequent changes truly required a stability window of warning_.
+  Honest headers after such change would correctly identify themselves as such by claiming the new era, and therefore would be correctly validated.
+  An adversarial header, in this hypothetical, could have falsely claimed to be from the new era, but the crucial insight is that doing so wouldn't have (TODO "significantly" or "at all"?) increased the chance the adversary could create an apparently-valid chain that is long enough to cause problems.
+
+Recall that that discussion was merely theoretical, to better delineate the fundamental requirements.
+The real Cardano ledger always has and still does ensure that header validity is fully determined at least one stability window in advance.
+We have had no motivating reason to eliminate that simplification, as of yet; so far we don't anticipate one arising soon.
+(
+Currently, the protocol parameter changes are currently even known two stabilty windows early!
+But some factors are still just singly stable, eg the stake distribution is only frozen one stability window before the next epoch.
+)
 
 TODO What about the config file overrides that result in empty epochs?
 (
