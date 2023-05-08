@@ -202,11 +202,6 @@ library
     Ouroboros.Consensus.Storage.ChainDB.Impl.Types
     Ouroboros.Consensus.Storage.ChainDB.Init
     Ouroboros.Consensus.Storage.Common
-    Ouroboros.Consensus.Storage.FS.API
-    Ouroboros.Consensus.Storage.FS.API.Types
-    Ouroboros.Consensus.Storage.FS.CRC
-    Ouroboros.Consensus.Storage.FS.Handle
-    Ouroboros.Consensus.Storage.FS.IO
     Ouroboros.Consensus.Storage.ImmutableDB
     Ouroboros.Consensus.Storage.ImmutableDB.API
     Ouroboros.Consensus.Storage.ImmutableDB.Chunks
@@ -223,7 +218,6 @@ library
     Ouroboros.Consensus.Storage.ImmutableDB.Impl.Types
     Ouroboros.Consensus.Storage.ImmutableDB.Impl.Util
     Ouroboros.Consensus.Storage.ImmutableDB.Impl.Validation
-    Ouroboros.Consensus.Storage.IO
     Ouroboros.Consensus.Storage.LedgerDB
     Ouroboros.Consensus.Storage.LedgerDB.DiskPolicy
     Ouroboros.Consensus.Storage.LedgerDB.Init
@@ -358,7 +352,6 @@ library consensus-testlib
   hs-source-dirs:  src/consensus-testlib
   visibility:      public
   exposed-modules:
-    Test.Util.Blob
     Test.Util.BoolProps
     Test.Util.ChainDB
     Test.Util.ChainUpdates
@@ -366,11 +359,6 @@ library consensus-testlib
     Test.Util.Classify
     Test.Util.Corruption
     Test.Util.FileLock
-    Test.Util.FS.Sim.Error
-    Test.Util.FS.Sim.FsTree
-    Test.Util.FS.Sim.MockFS
-    Test.Util.FS.Sim.Pure
-    Test.Util.FS.Sim.STM
     Test.Util.HardFork.Future
     Test.Util.HardFork.OracularClock
     Test.Util.InvertedMap

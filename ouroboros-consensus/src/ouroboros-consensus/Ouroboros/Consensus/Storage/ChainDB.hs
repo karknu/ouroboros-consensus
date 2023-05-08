@@ -1,11 +1,6 @@
 -- | The storage layer is a highly specialized database for storing the blockchain.
---   It consists of five subcomponents:
+--   It consists of four subcomponents:
 --
--- * An abstract file system API, 'System.FS.API.HasFS',
---   that smooths out over some differences between the file systems of
---   different operating systems and, more importantly, allows us to simulate
---   all kinds of failures. This is then used for stress-testing the other
---   components below.
 -- * The __[Immutable DB]("Ouroboros.Consensus.Storage.ImmutableDB")__, stores
 --   the part of the chain that is immutable, that is, no longer subject to
 --   rollback. It is an append-only database, providing efficient access to the
