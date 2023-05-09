@@ -52,6 +52,8 @@ module Ouroboros.Consensus.Storage.ChainDB.Impl.LgrDB (
   , LedgerDB.current
     -- * Exported for testing purposes
   , mkLgrDB
+    -- * Statistics for ledger tables
+  , getCurrentLedgerTableSize
   ) where
 
 import           Codec.CBOR.Decoding (Decoder)
@@ -566,3 +568,19 @@ getLedgerTablesAtFor ::
 getLedgerTablesAtFor pt keys LgrDB{ varDB, lgrBackingStore } = do
   lgrDb <- readTVarIO varDB
   ReadsKeySets.getLedgerTablesAtFor pt keys lgrDb lgrBackingStore
+
+{-------------------------------------------------------------------------------
+  Statistics for ledger tables
+-------------------------------------------------------------------------------}
+
+-- | Get the number of entries that are in a ledger table associated with the
+-- current ledger state.
+getCurrentLedgerTableSize ::
+     (IOLike m, HasLedgerTables (LedgerState blk))
+  => LgrDB m blk
+  -> m (Either (WithOrigin SlotNo, WithOrigin SlotNo) Int)
+getCurrentLedgerTableSize lgrDb = do
+    ldb <- readTVarIO varDB
+    ReadsKeySets.getCurrentLedgerTableSize ldb lgrBackingStore
+  where
+    LgrDB{ varDB, lgrBackingStore } = lgrDb

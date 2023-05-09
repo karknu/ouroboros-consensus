@@ -34,6 +34,7 @@ module Test.Ouroboros.Storage.LedgerDB.HD.BackingStore.Mock (
   , mBSCopy
   , mBSInitFromCopy
   , mBSInitFromValues
+  , mBSStat
   , mBSVHClose
   , mBSVHRangeRead
   , mBSVHRead
@@ -255,6 +256,16 @@ mBSWrite sl d = do
       backingValues = applyDiff vs d
     , backingSeqNo = NotOrigin sl
     })
+
+-- | Retrieve statistics for the backing store
+mBSStat ::
+     (MonadState (Mock vs) m, MonadError Err m, ValuesLength vs)
+  => m BS.Statistics
+mBSStat = do
+  mGuardBSClosed
+  vs <- gets backingValues
+  seqNo <- gets backingSeqNo
+  pure $ BS.Statistics seqNo (valuesLength vs)
 
 -- | Throw an error if the required backing store value handle has been closed.
 mGuardBSVHClosed ::

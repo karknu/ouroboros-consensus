@@ -187,6 +187,8 @@ instance ( Show ks, Show vs, Show d
     BSWrite          :: SlotNo
                      -> d
                      -> BSAct ks vs d ()
+    -- | Corresponds to 'bsStat'
+    BSStat           :: BSAct ks vs d BS.Statistics
     BSVHClose        :: BSVar ks vs d Handle
                      -> BSAct ks vs d ()
     BSVHRangeRead    :: BSVar ks vs d Handle
@@ -259,14 +261,16 @@ instance ( Show ks, Show vs, Show d
   data instance ModelValue (BackingStoreState ks vs d) a where
     MValueHandle :: ValueHandle vs -> BSVal ks vs d Handle
 
-    MErr    :: Err
-            -> BSVal ks vs d Err
-    MSlotNo :: WithOrigin SlotNo
-            -> BSVal ks vs d (WithOrigin SlotNo)
-    MValues :: vs
-            -> BSVal ks vs d (Values vs)
-    MUnit   :: ()
-            -> BSVal ks vs d ()
+    MErr        :: Err
+                -> BSVal ks vs d Err
+    MSlotNo     :: WithOrigin SlotNo
+                -> BSVal ks vs d (WithOrigin SlotNo)
+    MValues     :: vs
+                -> BSVal ks vs d (Values vs)
+    MUnit       :: ()
+                -> BSVal ks vs d ()
+    MStatistics :: BS.Statistics
+                -> BSVal ks vs d BS.Statistics
 
     MEither :: Either (BSVal ks vs d a) (BSVal ks vs d b)
             -> BSVal ks vs d (Either a b)
@@ -288,6 +292,7 @@ instance ( Show ks, Show vs, Show d
     MSlotNo x      -> OId x
     MValues x      -> OValues x
     MUnit x        -> OId x
+    MStatistics x  -> OId x
     MEither x      -> OEither $ bimap observeModel observeModel x
     MPair x        -> OPair   $ bimap observeModel observeModel x
 
@@ -318,6 +323,7 @@ instance ( Show ks, Show vs, Show d
     BSCopy _             -> []
     BSValueHandle        -> []
     BSWrite _ _          -> []
+    BSStat               -> []
     BSVHClose h          -> [SomeGVar h]
     BSVHRangeRead h _    -> [SomeGVar h]
     BSVHRead h _         -> [SomeGVar h]
@@ -373,6 +379,7 @@ instance ( Show ks, Show vs, Show d
     BSCopy _             -> OEither . bimap OId OId
     BSValueHandle        -> OEither . bimap OId (OPair . bimap OId (const OValueHandle))
     BSWrite _ _          -> OEither . bimap OId OId
+    BSStat               -> OEither . bimap OId OId
     BSVHClose _          -> OEither . bimap OId OId
     BSVHRangeRead _ _    -> OEither . bimap OId (OValues . unValues)
     BSVHRead _ _         -> OEither . bimap OId (OValues . unValues)
@@ -388,6 +395,7 @@ instance ( Show ks, Show vs, Show d
     BSCopy _             -> Just Dict
     BSValueHandle        -> Just Dict
     BSWrite _ _          -> Just Dict
+    BSStat               -> Just Dict
     BSVHClose _          -> Just Dict
     BSVHRangeRead _ _    -> Just Dict
     BSVHRead _ _         -> Just Dict
@@ -417,6 +425,8 @@ runMock lookUp = \case
       wrap mBSValueHandle . runMockState Mock.mBSValueHandle
     BSWrite sl d       ->
       wrap MUnit . runMockState (Mock.mBSWrite sl d)
+    BSStat             ->
+      wrap MStatistics . runMockState Mock.mBSStat
     BSVHClose h        ->
       wrap MUnit . runMockState (Mock.mBSVHClose (getHandle $ lookUp h))
     BSVHRangeRead h rq ->
@@ -467,6 +477,7 @@ arbitraryBackingStoreAction findVars (BackingStoreState mock _stats) =
       , (5, fmap Some $ BSCopy <$> genBackingStorePath)
       , (5, pure $ Some BSValueHandle)
       , (5, fmap Some $ BSWrite <$> genSlotNo <*> genDiff)
+      , (5, pure $ Some BSStat)
       ]
 
     withVars ::
@@ -577,6 +588,8 @@ runIO action lookUp = ReaderT $ \renv ->
           readMVar bsVar >>= (BS.bsValueHandle >=> mapM (registerHandle rr))
         BSWrite sl d       -> catchErr $
           readMVar bsVar >>= \bs -> BS.bsWrite bs sl d
+        BSStat             -> catchErr $
+          readMVar bsVar >>= \bs -> BS.bsStat bs
         BSVHClose h        -> catchErr $
           readHandle rr (lookUp' h) >>= \vh -> BS.bsvhClose vh
         BSVHRangeRead h rq -> catchErr $ Values <$>
@@ -692,6 +705,7 @@ data TagAction =
   | TBSCopy
   | TBSValueHandle
   | TBSWrite
+  | TBSStat
   | TBSVHClose
   | TBSVHRangeRead
   | TBSVHRead
@@ -706,6 +720,7 @@ tAction = \case
   BSCopy _             -> TBSCopy
   BSValueHandle        -> TBSValueHandle
   BSWrite _ _          -> TBSWrite
+  BSStat               -> TBSStat
   BSVHClose _          -> TBSVHClose
   BSVHRangeRead _ _    -> TBSVHRangeRead
   BSVHRead _ _         -> TBSVHRead

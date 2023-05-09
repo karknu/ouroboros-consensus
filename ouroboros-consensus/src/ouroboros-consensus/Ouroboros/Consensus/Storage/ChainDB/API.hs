@@ -247,7 +247,7 @@ data ChainDB m blk = ChainDB {
       -- internally partitions the chain into an " immutable " part and a
       -- " volatile " part, moving blocks from the volatile DB to the immutable
       -- DB when they become more than @k@ deep into the chain. When a block
-      -- with slot number @n@ is added to the immutble DB, a time delay @t@
+      -- with slot number @n@ is added to the immutable DB, a time delay @t@
       -- kicks in; after that time delay expires, all blocks older than @n@ may
       -- be removed from the volatile DB, /including any blocks that happen to
       -- live on other forks/ (since those forks must now, by definition, be too
@@ -288,7 +288,7 @@ data ChainDB m blk = ChainDB {
       -- block header, or (if we have switched to a fork) the instruction to
       -- rollback.
       --
-      -- The tracking iterator starts at genesis (see also 'trackForward').
+      -- The tracking iterator starts at genesis (see also 'followerForward').
       --
       -- This is intended for use by chain consumers to /reliably/ follow a
       -- chain, desipite the chain being volatile.
@@ -379,6 +379,25 @@ data ChainDB m blk = ChainDB {
         -> m (Either
                 (PointNotFound blk)
                 (LedgerTables (ExtLedgerState blk) ValuesMK))
+
+      -- | Get the number of entries that are in a ledger table associated with
+      -- the current ledger state.
+      --
+      -- The number of entries is the combination of the number of entries
+      -- stored on-disk in a backing store, and the number of entries that are
+      -- in the changelog.
+      --
+      -- Since for now only the UTxO is stored on disk, this function by default
+      -- returns the number of UTxOs in the current ledger state.
+      --
+      -- Returns @('WithOrigin' 'SlotNo', 'WithOrigin' 'SlotNo')@ if the
+      -- 'LedgerDB' and backing store are out of sync: the anchor slot number of
+      -- the 'LedgerDB' should match the tip of the backing store.
+    , getCurrentLedgerTableSize ::
+           m (Either
+                (WithOrigin SlotNo, WithOrigin SlotNo)
+                Int
+             )
 
       -- | Close the ChainDB
       --
@@ -735,7 +754,7 @@ data ChainType = SelectedChain | TentativeChain
 -- Unlike an 'Iterator', a 'Follower' is __dynamic__, that is, it will follow
 -- the chain when it grows or forks.
 --
--- A follower is __pull-based__, which avoids the neeed to have a growing queue
+-- A follower is __pull-based__, which avoids the need to have a growing queue
 -- of changes to the chain on the server side in case the client is slower.
 --
 -- A follower always has an __implicit position__ associated with it. The

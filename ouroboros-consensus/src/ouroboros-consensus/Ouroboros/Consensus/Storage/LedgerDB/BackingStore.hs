@@ -23,6 +23,8 @@ module Ouroboros.Consensus.Storage.LedgerDB.BackingStore (
   , RangeQuery (..)
   , bsRead
   , withBsValueHandle
+    -- * Statistics
+  , Statistics (..)
     -- * Ledger DB wrappers
   , LedgerBackingStore (..)
   , LedgerBackingStore'
@@ -61,6 +63,8 @@ data BackingStore m keys values diff = BackingStore {
   , bsValueHandle :: !(m (WithOrigin SlotNo, BackingStoreValueHandle m keys values))
     -- | Apply a valid diff to the contents of the backing store
   , bsWrite       :: !(SlotNo -> diff -> m ())
+    -- | Retrieve common statistics
+  , bsStat        :: !(m Statistics)
   }
 
 deriving via OnlyCheckWhnfNamed "BackingStore" (BackingStore m keys values diff)
@@ -138,6 +142,19 @@ withBsValueHandle store kont =
       (bsValueHandle store)
       (bsvhClose . snd)
       (uncurry kont)
+
+{-------------------------------------------------------------------------------
+  Statistics
+-------------------------------------------------------------------------------}
+
+-- | Common statistics for any backing store implementation.
+data Statistics = Statistics {
+    -- | The last slot number for which key-value pairs were written.
+    sequenceNumber :: !(WithOrigin SlotNo)
+    -- | The total number of key-value pair entries that are stored.
+  , numEntries     :: !Int
+  }
+  deriving stock (Show, Eq)
 
 {-------------------------------------------------------------------------------
   Ledger DB wrappers

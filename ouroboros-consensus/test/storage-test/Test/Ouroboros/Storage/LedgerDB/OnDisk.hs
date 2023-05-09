@@ -64,6 +64,7 @@ import qualified Data.Map.Diff.Strict.Internal as DS
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (fromJust)
+import           Data.Monoid
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.TreeDiff.Class (genericToExpr)
@@ -83,7 +84,8 @@ import qualified Ouroboros.Consensus.Storage.LedgerDB.BackingStore.LMDB as LMDB
 import qualified Ouroboros.Consensus.Storage.LedgerDB.DbChangelog as DbChangelog
 import qualified Ouroboros.Consensus.Storage.LedgerDB.DiffSeq as DS
 import           Ouroboros.Consensus.Storage.LedgerDB.ReadsKeySets
-                     (KeySetsReader, PointNotFound (..), getLedgerTablesFor,
+                     (KeySetsReader, PointNotFound (..),
+                     getCurrentLedgerTableSize, getLedgerTablesAtFor,
                      readKeySets)
 import           Ouroboros.Consensus.Util
 import           Ouroboros.Consensus.Util.IOLike
@@ -131,15 +133,16 @@ tests = testGroup "OnDisk"
   )
   where
     uniform = CmdDistribution
-        { freqCurrent   = 1
-        , freqPush      = 1
-        , freqSwitch    = 1
-        , freqSnap      = 1
-        , freqFlush     = 1
-        , freqRestore   = 1
-        , freqCorrupt   = 1
-        , freqDrop      = 1
-        , freqGetTables = 1
+        { freqCurrent             = 1
+        , freqPush                = 1
+        , freqSwitch              = 1
+        , freqSnap                = 1
+        , freqFlush               = 1
+        , freqRestore             = 1
+        , freqCorrupt             = 1
+        , freqDrop                = 1
+        , freqGetTables           = 1
+        , freqGetCurrentTableSize = 1
         }
 
     -- NOTE: For the LMDB backend we chose this distribution, which reduces the
@@ -150,15 +153,16 @@ tests = testGroup "OnDisk"
     -- to introduce modifications in the system under test only to accommodate
     -- the database sharing functionality needed for tests.
     lmdbCustom = CmdDistribution
-        { freqCurrent   = 10
-        , freqPush      = 10
-        , freqSwitch    = 1
-        , freqSnap      = 1
-        , freqFlush     = 5
-        , freqRestore   = 1
-        , freqCorrupt   = 1
-        , freqDrop      = 1
-        , freqGetTables = 1
+        { freqCurrent             = 10
+        , freqPush                = 10
+        , freqSwitch              = 1
+        , freqSnap                = 1
+        , freqFlush               = 5
+        , freqRestore             = 1
+        , freqCorrupt             = 1
+        , freqDrop                = 1
+        , freqGetTables           = 1
+        , freqGetCurrentTableSize = 1
         }
 
 testLMDBLimits :: LMDB.LMDBLimits
@@ -532,6 +536,10 @@ data Cmd ss =
   | Drop Word64
 
   | GetTablesAtFor (Point TestBlock) (LedgerTables (ExtLedgerState TestBlock) KeysMK)
+
+    -- | Get the number of entries that are in the ledger table associated with
+    -- the current ledger state.
+  | GetCurrentTableSize
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 data Success ss =
@@ -542,6 +550,7 @@ data Success ss =
   | Restored (MockInitLog ss, ExtLedgerState TestBlock EmptyMK)
   | Tables (Either (PointNotFound TestBlock) (LedgerTables (ExtLedgerState TestBlock) ValuesMK))
   | Flushed
+  | TableSize (Either (WithOrigin SlotNo, WithOrigin SlotNo) Int)
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | Currently we don't have any error responses
@@ -839,6 +848,14 @@ runMock cmd initMock =
           Nothing      -> Tables $ Left $ PointNotFound pt
           Just (_, st) -> Tables $ Right $ restrictValues st keys
 
+    go GetCurrentTableSize mock = (,mock) $
+          TableSize
+        $ Right
+        $ getSum
+        $ foldLedgerTables (\(ValuesMK m) -> Sum $ Map.size m)
+        $ projectLedgerTables
+        $ cur (mockLedger mock)
+
     push :: TestBlock -> StateT MockLedger (Except (ExtValidationError TestBlock)) ()
     push b = do
         ls <- State.get
@@ -1122,18 +1139,18 @@ runDB standalone@DB{..} cmd =
             (rs, _db) <- readTVar dbState
             writeTVar dbState (drop (fromIntegral n) rs, error "ledger DB not initialized")
         go hasFS Restore
-    go hasFS g@(GetTablesAtFor pt keys) = do
+    go _hasFS (GetTablesAtFor pt keys) = do
         (bstore, lgrDb) <- atomically $ do
           (_, db :: LedgerDB' TestBlock) <- readTVar dbState
           bstore <- readTVar dbBackingStore
           pure (bstore, db)
-        case rollback pt lgrDb of
-          Nothing -> pure $ Tables $ Left $ PointNotFound pt
-          Just l  -> do
-            eValues <- getLedgerTablesFor l keys (readKeySets bstore)
-            case eValues of
-              Right v -> pure $ Tables $ Right v
-              Left _  -> go hasFS g
+        Tables <$> getLedgerTablesAtFor pt keys lgrDb bstore
+    go _hasFS GetCurrentTableSize = do
+        (bstore, lgrDb) <- atomically $ do
+          (_, db :: LedgerDB' TestBlock) <- readTVar dbState
+          bstore <- readTVar dbBackingStore
+          pure (bstore, db)
+        TableSize <$> getCurrentLedgerTableSize lgrDb bstore
 
     push ::
          TestBlock
@@ -1270,15 +1287,16 @@ execCmds secParam = \(QSM.Commands cs) -> go (initModel secParam) cs
 --
 -- The values in this type determine what is passed to QuickCheck's 'frequency'.
 data CmdDistribution = CmdDistribution
-    { freqCurrent   :: Int
-    , freqPush      :: Int
-    , freqSwitch    :: Int
-    , freqSnap      :: Int
-    , freqFlush     :: Int
-    , freqRestore   :: Int
-    , freqCorrupt   :: Int
-    , freqDrop      :: Int
-    , freqGetTables :: Int
+    { freqCurrent             :: Int
+    , freqPush                :: Int
+    , freqSwitch              :: Int
+    , freqSnap                :: Int
+    , freqFlush               :: Int
+    , freqRestore             :: Int
+    , freqCorrupt             :: Int
+    , freqDrop                :: Int
+    , freqGetTables           :: Int
+    , freqGetCurrentTableSize :: Int
     }
     deriving (Generic, Show, Eq)
 
@@ -1305,6 +1323,7 @@ generator cd secParam (Model mock hs) =
         , (freqRestore,   pure Restore)
         , (freqDrop,      Drop <$> QC.choose (0, mockChainLength mock))
         , (freqGetTables, genGetTables)
+        , (freqGetCurrentTableSize, pure GetCurrentTableSize)
         ]
       where
         genGetTables :: Gen (Cmd ss)
@@ -1389,6 +1408,7 @@ shrinker _ (At cmd) =
       Flush        -> []
       Restore      -> []
       GetTablesAtFor{} -> []
+      GetCurrentTableSize{} -> []
       Switch 0 [b] -> [At $ Push b]
       Switch n bs  -> if length bs > fromIntegral n
                         then [At $ Switch n (init bs)]
@@ -1404,15 +1424,16 @@ shrinker _ (At cmd) =
 -------------------------------------------------------------------------------}
 
 instance CommandNames (At Cmd) where
-  cmdName (At Current{})        = "Current"
-  cmdName (At Push{})           = "Push"
-  cmdName (At Switch{})         = "Switch"
-  cmdName (At Snap{})           = "Snap"
-  cmdName (At Flush{})          = "Flush"
-  cmdName (At Restore{})        = "Restore"
-  cmdName (At Corrupt{})        = "Corrupt"
-  cmdName (At Drop{})           = "Drop"
-  cmdName (At GetTablesAtFor{}) = "GetTables"
+  cmdName (At Current{})             = "Current"
+  cmdName (At Push{})                = "Push"
+  cmdName (At Switch{})              = "Switch"
+  cmdName (At Snap{})                = "Snap"
+  cmdName (At Flush{})               = "Flush"
+  cmdName (At Restore{})             = "Restore"
+  cmdName (At Corrupt{})             = "Corrupt"
+  cmdName (At Drop{})                = "Drop"
+  cmdName (At GetTablesAtFor{})      = "GetTables"
+  cmdName (At GetCurrentTableSize{}) = "GetCurrentTableSize"
 
   cmdNames _ = [
       "Current"

@@ -30,3 +30,7 @@ trivialBackingStore emptyValues = do
               (\s _ -> void
                      $ IOLike.atomically
                      $ IOLike.modifyTVar seqNo (\_ -> At s))
+              (IOLike.atomically $ do
+                  s <- IOLike.readTVar seqNo
+                  pure $ Statistics s 0
+              )

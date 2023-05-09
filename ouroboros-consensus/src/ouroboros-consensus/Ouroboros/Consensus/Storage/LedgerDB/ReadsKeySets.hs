@@ -20,10 +20,13 @@ module Ouroboros.Consensus.Storage.LedgerDB.ReadsKeySets (
   , UnforwardedReadSets (..)
   , forwardTableKeySets
   , forwardTableKeySets'
+    -- * Statistics
+  , getCurrentLedgerTableSize
   ) where
 
 import           Cardano.Slotting.Slot
 import           Data.Map.Diff.Strict (applyDiffForKeys)
+import           Data.Monoid (Sum (..))
 import           Ouroboros.Consensus.Block.Abstract
 import           Ouroboros.Consensus.Ledger.Basics (IsLedger)
 import           Ouroboros.Consensus.Ledger.Tables
@@ -202,3 +205,34 @@ forwardTableKeySets ::
             (LedgerTables l ValuesMK)
 forwardTableKeySets dblog =
   forwardTableKeySets' (changelogDiffAnchor dblog) (changelogDiffs dblog)
+
+{-------------------------------------------------------------------------------
+  Statistics
+-------------------------------------------------------------------------------}
+
+-- | Get the number of entries that are in a ledger table associated with the
+-- current ledger state.
+getCurrentLedgerTableSize ::
+     (Monad m, HasLedgerTables l)
+  => LedgerDB l
+  -> LedgerBackingStore m l
+  -> m (Either (WithOrigin SlotNo, WithOrigin SlotNo) Int)
+getCurrentLedgerTableSize lgrDb lbs = do
+    Statistics{sequenceNumber = seqNo', numEntries = n} <- bsStat bs
+    if seqNo /= seqNo' then
+      pure $ Left (seqNo, seqNo')
+    else
+      pure $ Right $ n + nInserts - nDeletes
+  where
+    LedgerDB dblog = lgrDb
+    LedgerBackingStore bs = lbs
+
+    diffs = changelogDiffs dblog
+    seqNo = changelogDiffAnchor dblog
+
+    nInserts = getSum
+             $ foldLedgerTables (numInserts . getSeqDiffMK)
+               diffs
+    nDeletes = getSum
+             $ foldLedgerTables (numDeletes . getSeqDiffMK)
+               diffs

@@ -38,6 +38,7 @@ import           Data.Functor (($>), (<&>))
 import           Data.Map (Map)
 import           Data.Map.Diff.Strict
 import qualified Data.Map.Strict as Map
+import           Data.Monoid (Sum (..))
 import qualified Data.Set as Set
 import qualified Data.Text as Strict
 import qualified Database.LMDB.Simple as LMDB
@@ -479,10 +480,19 @@ newLMDBBackingStoreInitialiser dbTracer limits sfs initFrom = do
                pure (dbsSeq, s {dbsSeq = At slot})
              Trace.traceWith dbTracer $ TDBWrite oldSlot slot
 
+           bsStat :: m HD.Statistics
+           bsStat = do
+             guardDbClosed dbClosed
+             liftIO $ LMDB.readWriteTransaction dbEnv $ withDbStateRW dbState $ \s@DbState{dbsSeq} -> do
+               constn <- traverseLedgerTables (\(LMDBMK _ dbx) -> ConstMK <$> LMDB.size dbx) dbBackingTables
+               let n = getSum $ foldLedgerTables (Sum . getConstMK) constn
+               pure (HD.Statistics dbsSeq n, s)
+
        in HD.BackingStore { HD.bsClose = bsClose
                            , HD.bsCopy = bsCopy
                            , HD.bsValueHandle = bsValueHandle
                            , HD.bsWrite = bsWrite
+                           , HD.bsStat = bsStat
                            }
 
       where
