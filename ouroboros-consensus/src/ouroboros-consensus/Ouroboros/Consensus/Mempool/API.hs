@@ -30,6 +30,7 @@ module Ouroboros.Consensus.Mempool.API (
   , TicketNo
   , TxSizeInBytes
   , zeroTicketNo
+  , ApplyTxErrXXX (..)
   ) where
 
 import           Ouroboros.Consensus.Block (SlotNo)
@@ -214,6 +215,11 @@ data Mempool m blk = Mempool {
     , getTxSize      :: GenTx blk -> TxSizeInBytes
     }
 
+data ApplyTxErrXXX blk = ApplyTxErrReal !(ApplyTxErr blk)
+                       | ApplyTxErrDuplicate
+deriving instance (Eq (GenTx blk), Eq (Validated (GenTx blk)), Eq (ApplyTxErr blk)) => Eq (ApplyTxErrXXX blk)
+deriving instance (Show (GenTx blk), Show (Validated (GenTx blk)), Show (ApplyTxErr blk)) => Show (ApplyTxErrXXX blk)
+
 {-------------------------------------------------------------------------------
   Result of adding a transaction to the mempool
 -------------------------------------------------------------------------------}
@@ -222,7 +228,7 @@ data Mempool m blk = Mempool {
 data MempoolAddTxResult blk
   = MempoolTxAdded !(Validated (GenTx blk))
     -- ^ The transaction was added to the mempool.
-  | MempoolTxRejected !(GenTx blk) !(ApplyTxErr blk)
+  | MempoolTxRejected !(GenTx blk) !(ApplyTxErrXXX blk)
     -- ^ The transaction was rejected and could not be added to the mempool
     -- for the specified reason.
 

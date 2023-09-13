@@ -520,7 +520,7 @@ data TraceEventMempool blk
       (GenTx blk)
       -- ^ New, invalid transaction thas was rejected and thus not added to
       -- the Mempool.
-      (ApplyTxErr blk)
+      (ApplyTxErrXXX blk)
       -- ^ The reason for rejecting the transaction.
       MempoolSize
       -- ^ The current size of the Mempool.

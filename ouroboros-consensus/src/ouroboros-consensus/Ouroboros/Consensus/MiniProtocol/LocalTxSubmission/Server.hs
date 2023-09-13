@@ -34,7 +34,8 @@ localTxSubmissionServer tracer mempool =
         case res of
           [addTxRes] -> case addTxRes of
             MempoolTxAdded _tx             -> return (SubmitSuccess, server)
-            MempoolTxRejected _tx addTxErr -> return (SubmitFail addTxErr, server)
+            MempoolTxRejected _tx (ApplyTxErrReal addTxErr) -> return (SubmitFail addTxErr, server)
+            MempoolTxRejected _tx _ -> error "localaddTx XXX"
           -- The output list of addTxs has the same length as the input list.
           _                 -> error "addTxs: unexpected result"
 

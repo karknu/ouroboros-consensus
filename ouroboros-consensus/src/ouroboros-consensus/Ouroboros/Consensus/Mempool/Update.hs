@@ -185,30 +185,38 @@ pureTryAddTx cfg txSize wti tx is
   | let curSize = msNumBytes  $ isMempoolSize is
   , curSize < getMempoolCapacityBytes (isCapacity is)
   = -- We add the transaction if there is at least one byte free left in the mempool.
-  case eVtx of
-      -- We only extended the ValidationResult with a single transaction
-      -- ('tx'). So if it's not in 'vrInvalid', it must be in 'vrNewValid'.
-      Right vtx ->
-        assert (isJust (vrNewValid vr)) $
+  if Set.member (txId tx) (isTxIds is)
+     -- The transaction is already in the mempool. Adding it again can't succeed.
+     then let err = ApplyTxErrDuplicate in -- XXX hack
           TryAddTx
-            (Just is')
-            (MempoolTxAdded vtx)
-            (TraceMempoolAddedTx
-              vtx
-              (isMempoolSize is)
-              (isMempoolSize is')
-            )
-      Left err ->
-        assert (isNothing (vrNewValid vr))  $
-          assert (length (vrInvalid vr) == 1) $
-            TryAddTx
-              Nothing
-              (MempoolTxRejected tx err)
-              (TraceMempoolRejectedTx
-               tx
-               err
-               (isMempoolSize is)
-              )
+            Nothing
+            (MempoolTxRejected tx err)
+            (TraceMempoolRejectedTx tx err (isMempoolSize is))
+     else
+       case eVtx of
+            -- We only extended the ValidationResult with a single transaction
+            -- ('tx'). So if it's not in 'vrInvalid', it must be in 'vrNewValid'.
+            Right vtx ->
+              assert (isJust (vrNewValid vr)) $
+                TryAddTx
+                  (Just is')
+                  (MempoolTxAdded vtx)
+                  (TraceMempoolAddedTx
+                    vtx
+                    (isMempoolSize is)
+                    (isMempoolSize is')
+                  )
+            Left err ->
+              assert (isNothing (vrNewValid vr))  $
+                assert (length (vrInvalid vr) == 1) $
+                  TryAddTx
+                    Nothing
+                    (MempoolTxRejected tx (ApplyTxErrReal err))
+                    (TraceMempoolRejectedTx
+                     tx
+                     (ApplyTxErrReal err)
+                     (isMempoolSize is)
+                    )
   | otherwise
   = NoSpaceLeft
     where
