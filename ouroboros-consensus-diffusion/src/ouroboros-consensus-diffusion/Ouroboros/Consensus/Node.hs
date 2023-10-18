@@ -715,8 +715,8 @@ stdBfcSaltIO = randomIO
 stdKeepAliveRngIO :: IO StdGen
 stdKeepAliveRngIO = newStdGen
 
-stdChainSyncTimeout :: IO NTN.ChainSyncTimeout
-stdChainSyncTimeout = do
+stdChainSyncTimeout :: Maybe DiffTime -> IO NTN.ChainSyncTimeout
+stdChainSyncTimeout idleTimeout = do
     -- These values approximately correspond to false positive
     -- thresholds for streaks of empty slots with 99% probability,
     -- 99.9% probability up to 99.999% probability.
@@ -738,6 +738,7 @@ stdChainSyncTimeout = do
     return NTN.ChainSyncTimeout
       { canAwaitTimeout  = shortWait
       , intersectTimeout = shortWait
+      , idleTimeout
       , mustReplyTimeout
       }
 
@@ -805,6 +806,7 @@ data StdRunNodeArgs m blk (p2p :: Diffusion.P2P) = StdRunNodeArgs
   , srnMaybeMempoolCapacityOverride :: Maybe MempoolCapacityBytesOverride
     -- ^ Determine whether to use the system default mempool capacity or explicitly set
     -- capacity of the mempool.
+  , srnChainSyncIdleTimeout         :: Maybe DiffTime
   }
 
 -- | Conveniently packaged 'LowLevelRunNodeArgs' arguments from a standard
@@ -830,7 +832,7 @@ stdLowLevelRunNodeArgsIO RunNodeArgs{ rnProtocolInfo
     llrnKeepAliveRng <- stdKeepAliveRngIO
     pure LowLevelRunNodeArgs
       { llrnBfcSalt
-      , llrnChainSyncTimeout = stdChainSyncTimeout
+      , llrnChainSyncTimeout = stdChainSyncTimeout srnChainSyncIdleTimeout
       , llrnCustomiseHardForkBlockchainTimeArgs = id
       , llrnKeepAliveRng
       , llrnChainDbArgsDefaults =
